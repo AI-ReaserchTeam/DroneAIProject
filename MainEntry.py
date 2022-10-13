@@ -43,6 +43,7 @@ win.resizable(False, False)  # prevent it from been resized by user
 #print('I came here')
 save_model_dir = 'C:\Model'
 save_weight_dir = 'C:\Weight'
+epoch_interval_to_display_loss = 1  #   20 or 50 depending will be used
 max_num_frames_per_video = 2    # Use None to use all the frames in each video, or desire max number of frames can be used. 2 is just for testing the code
 image_hight_default = 240
 image_width_default = 300
@@ -327,24 +328,24 @@ def create_model():
             batch_loss = model.train_on_batch(traing_data, targets)   # not sure if epoch is needed on trin.batch
             loss_graph = np.hstack((loss_graph, batch_loss))
             over_all_iteration = over_all_iteration + 1
-            if iteration_index % 1 == 0 and normal_fine_tune_index == 0:
+            if iteration_index % epoch_interval_to_display_loss == 0 and normal_fine_tune_index == 0:
                 print('Normal Iteration:\t', over_all_iteration, ',\tTime Taken in Minutes:\t',round(((time() - start_time)/60), 2), ',\t Loss:\t', batch_loss )
-            elif iteration_index % 1 == 0 and normal_fine_tune_index == 1:
+            elif iteration_index % epoch_interval_to_display_loss == 0 and normal_fine_tune_index == 1:
                 print('Fine Tuning Iteration:\t', over_all_iteration, ',\tTime Taken in Minutes:\t',round(((time() - start_time)/60), 2), ',\t Loss:\t', batch_loss )
     #model_path = os.path.join(save_model_dir, base_pretrained_model + '.pickl')
-    model_path = os.path.join(save_model_dir, base_pretrained_model + '.h5')
+    model_path = os.path.join(save_model_dir, base_pretrained_model + '.h5') # this will be saved in .mat when lunched
     #model_path = base_pretrained_model + '.pickl'
     print('Model Saving Dir:\t', model_path)
     # model_path_file = open(model_path, 'wb')
     # pk.dump(model,model_path_file)
     model.save(model_path)
     # model_path_file.close()
-    print('Model created and trained successfully. Saved as/in:\t', model_path)
-    msg.showinfo('Great Job!','Model created and trained successfully. Saved as/in:\t' + model_path)
+    print('Model created, trained and successfully Saved as/in:\t', model_path)
+    msg.showinfo('Great Job!','Model created, trained and successfully Saved as/in:\t' + model_path)
     #   savemat(model_path, model) wrte a function to save the model and weight as .mat
 
 
-def save_model(model, json_path, weight_path):
+def save_model(model, json_path, weight_path):  # not yet use, ours may be different
     json_string = model.to_json()
     open(json_path, 'w').write(json_string)
     dict = {}
@@ -571,6 +572,7 @@ def extract_video_frames(video_path):
 
 
 def objective_function(out_true, output_predict):
+    #   print('Objective Func Out:\n', output_predict)
     classes_labels_number = number_of_classes_labels()
     if classes_labels_number is None:
         return
@@ -580,17 +582,19 @@ def objective_function(out_true, output_predict):
     if batch_video_size is None:
         batch_video_size = batch_video_size_default
     number_video_per_class = int(batch_video_size/number_classes)
-    out_true = K.reshape(out_true, [-1])
-    output_predict = K.reshape(output_predict, [-1])
-    out_true = K.reshape(out_true, (-1,number_classes))
-    output_predict = K.reshape(output_predict, (-1, number_classes))
+    ###############################################
+    # out_true = K.reshape(out_true, [-1])
+    # output_predict = K.reshape(output_predict, [-1])
+    # out_true = K.reshape(out_true, (-1, number_classes))
+    # output_predict = K.reshape(output_predict, (-1, number_classes))
+    #########################################################
     #frame_count_file_path = frame_count_dir + frames_count_list_file + '.pickl'
-    print('shape re Out:\n', K.shape(out_true), '\nshape pre Out:\n', K.shape(output_predict))
-    print('True\n', out_true, '\nPredicted:\n', output_predict, '\n')
+    print('shape of Actual Output:\n', K.shape(out_true), '\nshape of predicted Output:\n', K.shape(output_predict))
+    print('Actual Output\n', out_true, '\nPredicted Output:\n', output_predict, '\n')
     frame_count_file = open(frames_count_list_file, 'rb')
     number_frame_per_video = pk.load(frame_count_file)
     frame_count_file.close()
-    print('Pickle frames saved\n')
+    print('Pickle frames loaded\n')
     number_frame_per_video_list = []
     for index in range(0, len(number_frame_per_video)):     # obtain cumulative sum of frames
         number_frame_per_video_list.append(sum(number_frame_per_video[0:index + 1]))
@@ -604,7 +608,7 @@ def objective_function(out_true, output_predict):
         temporal_constrains_list = []
         sparsity_constrains_list = []
         for class_video_index in range(0, int(number_video_per_class * number_classes)):
-            video_predictions = output_predict[-1, class_index]
+            video_predictions = output_predict[:, class_index]   #   output_predict[-1, class_index]
             video_predictions = K.reshape(video_predictions, [-1])
             video_predictions = video_predictions[number_frame_per_video_list[class_video_index] : number_frame_per_video_list[class_video_index + 1]]
             if class_index == 0:
@@ -659,7 +663,7 @@ def objective_function(out_true, output_predict):
         z = K.mean(z_scores)
         final_objective_function_list.append(z + lambda_1 * K.sum(temporal_constrains) + lambda_2 * K.sum(sparsity_constrains))
     print('Objective Fitness Function:\t', K.mean(K.stack(final_objective_function_list)))
-    return K.mean(K.stack((final_objective_function_list)))
+    return K.mean(K.stack(final_objective_function_list))
 
 
 
