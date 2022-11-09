@@ -3,7 +3,6 @@ import tensorflow as tf
 import efficientnet.keras as efn
 import cv2
 import keras.backend as K
-import pyodbc as  dbc
 import numpy as np
 import pickle as pk
 #from sklearn.externals import joblib
@@ -42,15 +41,8 @@ win.title('NRF AI TOOLKIT')
 win.resizable(False, False)  # prevent it from been resized by user
 #feature_extractor = c3d.c3d_feature_extractor()
 #print('I came here')
-database_server = 'TETFUND-NRF-AI'  # server here
-database_name = 'NRF_AI_DATABASE'
-database_user_name = 'user name here'
-database_password = 'pass word here'
 save_model_dir = 'C:\Model'
 save_weight_dir = 'C:\Weight'
-instance_loss_function_dir = 'C:\InstanceLoss'
-vector_loss_function_dir = 'C:\VectorLoss'
-epoch_interval_to_save_model = 20
 epoch_interval_to_display_loss = 1  #   20 or 50 depending will be used
 max_num_frames_per_video = 2    # Use None to use all the frames in each video, or desire max number of frames can be used. 2 is just for testing the code
 image_hight_default = 240
@@ -61,7 +53,7 @@ normal_learning_rate_default = 1e-3
 fine_tuning_learning_rate_default =1e-6
 number_of_batch_iteration_defualt = 300
 main_training_epoch_default = 2000
-fine_tuning_epoch_default = 200
+fine_tuning_epoch_default = 20
 #number_classes = 5
 batch_video_size_default = 50      #   10 videos from each class
 number_video_per_class_default = 10
@@ -70,8 +62,6 @@ second_layer_neuron_default = 128
 lambda_1 = 0.00008
 lambda_2 = 0.00008
 test_weighted_mean_factor = 0.01
-table_identifier = 1
-query_identifier = 2
 current_dir = os.getcwd()
 frame_count_dir = os.getcwd()     #   'C:/FramesCount'  # this need to be created for pickle
 frames_count_list_file = 'framesCount.pickl'
@@ -82,8 +72,6 @@ video_folder_test = ['TestRobery', 'TestBandit', 'TestBanditActivity', 'TestKeep
 video_folder_validation = ['ValidationRobery', 'ValidationBandit', 'ValidationBanditActivity', 'ValidationKeepNap', 'ValidationNormal']
 model_folder = 'Model'
 model_weight_folder = 'ModelWeight'
-table_name_variable = tk.StringVar()
-fields_variabl = tk.StringVar()
 number_of_batch_iteration_variable = tk.StringVar()
 activation_function_variable = tk.StringVar()
 class_label_variable = tk.StringVar()
@@ -120,7 +108,7 @@ DropDownActivatonFunction['values'] = ('sigmoid_relu', 'sigmoid_sigmoid', 'relu_
 DropDownModel =  ttk.Combobox(win,width=15, textvariable=model_variable, state='readonly')
 DropDownModel['values'] = ('Xception', 'RestNet50', 'InCeptionV3', 'VGG16', 'EfficientNetB0', 'EfficientNetB7')
 DropDownListName = ttk.Combobox(win,width=20, textvariable=dropdown_list, state='readonly')
-DropDownListName['values'] = ('Create Model/Training', 'Test', 'Lunch Model', 'Visualize', 'Create Table', 'Query')
+DropDownListName['values'] = ('Create Model/Training', 'Test', 'Lunch Model', 'Visualize')
 directry_label = ttk.Label(win, text='Video Directory')
 image_size_label = ttk.Label(win, text='Image Size')
 batch_video_size_label = ttk.Label(win, text='Batch Size')
@@ -183,105 +171,9 @@ def action_function():
         pass
     elif action == 'Visualize':
         pass
-    elif action == 'Create Table':
-        create_table_gui(table_identifier)
-    elif action == 'Query':
-        create_table_gui(query_identifier)
     else:
         msg.showerror('Error', 'Please select a function')
         return
-
-
-def create_table_gui(table_query=None):
-    win_create = Toplevel()
-    win_create.resizable(False, False)
-    tip_win_create = Balloon(win_create)
-    fields_edit = ttk.Entry(win_create, width=70, textvariable=fields_variabl)
-    if table_query == table_identifier:
-        win_create.title('Create Table')
-        table_name_edit = ttk.Entry(win_create, width=20, textvariable=table_name_variable)
-        table_name_label = ttk.Label(win_create, text='Table Name')
-        table_name_label.grid(column=0, row=1, sticky='w', padx=2, pady=4)
-        table_name_edit.grid(column=1, row=1, sticky='w', padx=2, pady=4)
-        ok_create_button = ttk.Button(win_create, text='OK', command=sub_create_table)
-        tip_win_create.bind_widget(fields_edit, balloonmsg='Table Columns with Data Type\nSeparated by Comma')
-        tip_win_create.bind_widget(table_name_edit, balloonmsg='Table Name')
-        fields_label = ttk.Label(win_create, text='Fields Name')
-    elif table_query == query_identifier:
-        win_create.title('Query Statement')
-        ok_create_button = ttk.Button(win_create, text='OK', command=query_function)
-        tip_win_create.bind_widget(fields_edit, balloonmsg='Write your SQL Command')
-        fields_label = ttk.Label(win_create, text='Query Statement')
-    fields_label.grid(column=0, row=0, sticky='w', padx=2, pady=4)
-    fields_edit.grid(column=1, row=0, sticky='w', padx=2, pady=4)
-    ok_create_button.grid(column=1, row=2, sticky='w', padx=2, pady=4)
-    fields_edit.focus()
-
-
-def query_function():
-    query_item = fields_variabl.get()
-    cursor = connect_to_db()
-    try:
-        items = cursor.execute(query_item)
-        for item in items:  #   this is for things to be visulized as text or numbers not for videos. Code for videos is needed
-            print(item)
-    except Exception as e:
-        print(e)
-        msg.showerror('Error', 'Execution of Query Failed')
-    cursor.commit()
-    cursor.close()
-
-def sub_create_table():
-    table_name = table_name_variable.get()
-    fields = fields_variabl.get()
-    if table_name and fields:
-        create_table(table_name, fields)
-    else:
-        create_table()
-
-def connect_to_db():
-    # Some other example server values are
-    # server = 'localhost\sqlexpress' # for a named instance
-    # server = 'myserver,port' # to specify an alternate port
-    # ENCRYPT defaults to yes starting in ODBC Driver 18. It's good to always specify ENCRYPT=yes on the client side to avoid MITM attacks.
-    try:
-        cnxn = dbc.connect('DRIVER={ODBC Driver 17 for SQL Server};SERVER=' + database_server + ';DATABASE=' + database_name + ';Trusted_Connection=yes;')
-        # cnxn = dbc.connect('DRIVER={ODBC Driver 17 for SQL Server};SERVER=' + database_server + ';DATABASE='+ database_name +';ENCRYPT=yes;UID=' + database_user_name + ';PWD=' + database_password)
-        cursor = cnxn.cursor()
-        print('Connection successful')
-        return cursor
-    except Exception as e:
-        print('Connection unsuccessful:\n', e)
-
-
-def create_table(table_name=None, fields=None):
-    cursor = connect_to_db()
-    #check_table = cursor.execute('SELECT OBJECT_ID(' + 'security_posts,' + 'U' + ') AS Result')
-    if table_name is None and fields is None:
-        if cursor.tables(table='security_posts', tableType='TABLE').fetchone():
-            #if check_table:
-            msg.showinfo('Table Exist', 'Table security_posts already exist')
-        else:
-            cursor.execute('CREATE TABLE security_posts(security_id int IDENTITY(1,1) primary key, security_name nvarchar(30), latitute float, longitute float, phone_number_1 varchar(15), phone_number_2 varchar(15))')
-            print('Table created:\tsecurity_postsream_data')
-        # check_table = cursor.execute('SELECT OBJECT_ID(' + 'stream_data,' + 'U' + ') AS Result')
-        if cursor.tables(table='stream_data', tableType='TABLE').fetchone():
-            msg.showinfo('Table Exist', 'Table stream_data already exist')
-        else:
-            cursor.execute('CREATE TABLE stream_data(serial_id int IDENTITY(1,1) primary key, drone_name nvarchar(10),  time time, day nvarchar(10), date date, latitude float, longitude float, video VARBINARY(MAX), prediction_class nvarchar(20), anomaly tinyint)')
-            print('Table created:\tstream_data')
-    else:
-        try:
-            if cursor.tables(table=table_name, tableType='TABLE').fetchone():
-                msg.showerror('Table Exist', 'Table already exist:\t' + table_name)
-            else:
-                cursor.execute('CREATE TABLE ' + table_name + '(' + fields + ')')
-                msg.showinfo('Create Job!', 'Table Created:\t' + table_name)
-        except Exception as e:
-            print(e)
-            msg.showerror('Error', 'Table Not Created:\t' + table_name)
-    cursor.commit()
-    cursor.close()
 
 
 def number_of_classes_labels():
@@ -419,9 +311,6 @@ def create_model():
     loss_graph = []
     start_time = time()
     over_all_iteration = 0
-    model_path = os.path.join(save_model_dir, base_pretrained_model + '.h5')
-    instance_loss_path = os.path.join(instance_loss_function_dir, base_pretrained_model + '.pickl')
-    vector_loss_path = os.path.join(vector_loss_function_dir, base_pretrained_model + 'pickl')
     for normal_fine_tune_index in range(0, 2):
         if normal_fine_tune_index == 1:     #   unfreezed and fine tune the model
             base_xception.trainable = True # unfreeze based model weigths
@@ -437,29 +326,20 @@ def create_model():
             pk.dump(number_frames_per_video_list,frame_count_file) # save frame per video to be load in objective function
             frame_count_file.close()
             batch_loss = model.train_on_batch(traing_data, targets)   # not sure if epoch is needed on trin.batch
-            # loss_graph = np.hstack((loss_graph, batch_loss))
-            loss_graph.append(batch_loss)
+            loss_graph = np.hstack((loss_graph, batch_loss))
             over_all_iteration = over_all_iteration + 1
-            if iteration_index % epoch_interval_to_save_model == 0:
-                model.save(model_path)  #   save model
-                instance_loss_file = open(instance_loss_path, 'wb')
-                pk.dump(batch_loss, instance_loss_file)
-                loss_vector_path_file = open(vector_loss_path, 'wb')
-                pk.dump(loss_graph, loss_vector_path_file)
-                instance_loss_file.close()
-                loss_vector_path_file.close()
             if iteration_index % epoch_interval_to_display_loss == 0 and normal_fine_tune_index == 0:
                 print('Normal Iteration:\t', over_all_iteration, ',\tTime Taken in Minutes:\t',round(((time() - start_time)/60), 2), ',\t Loss:\t', batch_loss )
             elif iteration_index % epoch_interval_to_display_loss == 0 and normal_fine_tune_index == 1:
                 print('Fine Tuning Iteration:\t', over_all_iteration, ',\tTime Taken in Minutes:\t',round(((time() - start_time)/60), 2), ',\t Loss:\t', batch_loss )
-    #   model_path = os.path.join(save_model_dir, base_pretrained_model + '.pickl')
-    #   model_path = os.path.join(save_model_dir, base_pretrained_model + '.h5') # this will be saved in .mat when lunched
-    #   model_path = base_pretrained_model + '.pickl'
+    #model_path = os.path.join(save_model_dir, base_pretrained_model + '.pickl')
+    model_path = os.path.join(save_model_dir, base_pretrained_model + '.h5') # this will be saved in .mat when lunched
+    #model_path = base_pretrained_model + '.pickl'
     print('Model Saving Dir:\t', model_path)
-    loss_vector_path_file = open(vector_loss_path, 'wb')
-    pk.dump(loss_graph, loss_vector_path_file)
+    # model_path_file = open(model_path, 'wb')
+    # pk.dump(model,model_path_file)
     model.save(model_path)
-    loss_vector_path_file.close()
+    # model_path_file.close()
     print('Model created, trained and successfully Saved as/in:\t', model_path)
     msg.showinfo('Great Job!','Model created, trained and successfully Saved as/in:\t' + model_path)
     #   savemat(model_path, model) wrte a function to save the model and weight as .mat
@@ -486,9 +366,6 @@ def save_model(model, json_path, weight_path):  # not yet use, ours may be diffe
 
 
 def testing():
-    plot_colour = ['r', 'b', 'y', 'g', 'k', 'c', 'm', 'r', 'b', 'y', 'g', 'k', 'c', 'm', 'r', 'b', 'y', 'g', 'k', 'c', 'm', 'r', 'b', 'y', 'g', 'k', 'c', 'm', 'r', 'b', 'y', 'g', 'k', 'c', 'm', 'r', 'b', 'y', 'g', 'k', 'c', 'm']   #, '--y', '--g', '--k', '-.r', '-.b', '-.y', '-.g', '-.k', '.r', '.b', '.y', '.g', '.k', '*r', '*b', '*y', '*g', '*k']
-    plot_marker = ['-', '-','-','-','-','-','-', '--', '--', '--', '--', '--', '--', '--', '-.', '-.', '-.', '-.', '-.', '-.', '-.', ':', ':', ':', ':', ':', ':', ':', '.', '.', '.', '.', '.', '.', '.', 'o', 'o', 'o', 'o', 'o', 'o', 'o']
-    print('len colour:\t', len(plot_colour), '\tlen marker:\t', len(plot_marker))
     print('Testing Trained Model...')
     classes_labels_number = number_of_classes_labels()
     if classes_labels_number is None:
@@ -519,7 +396,6 @@ def testing():
     predicted_class_list = []
     actual_class_list = []
     number_frame_per_video_list = []
-    prob_all_class_list = []
     for index in range(0, len(number_frame_per_video)):     # obtain cumulative sum of frames
         number_frame_per_video_list.append(sum(number_frame_per_video[0:index + 1]))
     number_frame_per_video_list = [0] + number_frame_per_video_list  # the [0] is for the initial count range
@@ -537,19 +413,16 @@ def testing():
             print(class_index, ':\tall_scores 0k1:\n', all_scores)
             all_scores = np.reshape(all_scores, -1)
             print(class_index, ':\tall_scores:\n', all_scores)
-            required_scores = all_scores[start_frame_index:end_frame_index]
+            required_scores = all_scores[start_frame_index : end_frame_index]
             print(class_index, ':\trequired_scores:\n', required_scores)
             max_index = np.argmax(required_scores)
             max_score = required_scores[max_index]
-            others_array = np.delete(required_scores, max_index)
-            others_mean = np.mean(others_array) * test_weighted_mean_factor
+            others_mean = np.mean(np.delete(required_scores, max_index)) * test_weighted_mean_factor
             video_score_list.append(max_score + others_mean)
         #class_score_list.append(video_score_list)
-        prob_all_class_list.append(video_score_list)
         predicted_class_list.append(class_labels[np.argmax(video_score_list)])
     print('actual_class_list:\n', actual_class_list)
     print('predicted_class_list:\n', predicted_class_list)
-    prob_all_class_list = np.array(prob_all_class_list)
     actual_class_list = np.array(actual_class_list)
     predicted_class_list = np.array(predicted_class_list)
     accurracy = metrics.accuracy_score(actual_class_list, predicted_class_list)
@@ -564,19 +437,6 @@ def testing():
     plt.title('Confusion Matrix')
     plt.ylabel('Actual Class')
     plt.xlabel('Predicted Class')
-    # plt.show()
-    plt.figure()
-    colour_index = 0
-    for class_index in range(0, len(class_labels)):
-        colour_index = colour_index + 1
-        if colour_index > len(plot_colour) - 1:
-            colour_index = 0
-        plt.plot(range(1, len(number_frame_per_video_list)), prob_all_class_list[:, class_index], plot_marker[colour_index], color=plot_colour[colour_index], label=class_labels[class_index])
-    plt.xlabel('Sample Videos')
-    plt.ylabel('Prediction Propability')
-    # Adding legend, which helps us recognize the curve according to it's color
-    plt.legend()
-    # To load the display windows
     plt.show()
 
 
